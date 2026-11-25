@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Трекер Расходов</title>
+    <!-- Подключаем библиотеку для графиков -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; background-color: #f5f5f5; }
+        h1, h2 { color: #333; text-align: center; }
+        .form-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .form-box input { padding: 10px; flex: 1; min-width: 120px; border: 1px solid #ddd; border-radius: 4px; }
+        .form-box button { padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .form-box button:hover { background: #45a049; }
+        .chart-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 400px; margin-left: auto; margin-right: auto; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #4CAF50; color: white; }
+    </style>
+</head>
+<body>
+    <h1>💰 Мои Расходы</h1>
+
+    <div class="form-box">
+        <input type="number" id="amount" placeholder="Сумма" step="0.01">
+        <input type="text" id="category" placeholder="Категория (еда, такси...)">
+        <input type="text" id="description" placeholder="Описание">
+        <button onclick="addTransaction()">➕ Добавить</button>
+    </div>
+
+    <!-- Место для графика -->
+    <div class="chart-container">
+        <h2>Расходы по категориям</h2>
+        <canvas id="expenseChart"></canvas>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Описание</th>
+                <th>Категория</th>
+                <th>Сумма (BYN)</th>
+                <th>Дата</th>
+            </tr>
+        </thead>
+        <tbody id="transactions-body"></tbody>
+    </table>
+
+    <script>
+        let myChart = null; // Переменная для хранения графика
+
+        async function loadTransactions() {
+            const response = await fetch('/api/transactions');
+            const transactions = await response.json();
+            const tbody = document.getElementById('transactions-body');
+            tbody.innerHTML = ''; 
+            
+            transactions.forEach(t => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${t.ID}</td><td>${t.Description}</td><td>${t.Category}</td><td>${t.Amount.toFixed(2)}</td><td>${t.Date}</td>`;
+                tbody.appendChild(row);
+            });
+            
+            loadChart(); // После загрузки таблицы обновляем график
+        }
+
+        async function loadChart() {
+            const response = await fetch('/api/stats');
+            const stats = await response.json();
+            
+            const labels = stats.map(s => s.category);
+            const data = stats.map(s => s.sum);
+
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            
+            // Если график уже есть, уничтожаем его перед созданием нового
+            if (myChart) myChart.destroy();
+
+            myChart = new Chart(ctx, {
+                type: 'doughnut', // Тип графика: круговая диаграмма с дыркой
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Сумма (BYN)',
+                        data: data,
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+
+        async function addTransaction() {
+            const amount = document.getElementById('amount').value;
+            const category = document.getElementById('category').value;
+            const description = document.getElementById('description').value;
+
+            if (!amount || !category || !description) {
+                alert('Заполни все поля!');
+                return;
+            }
+
+            await fetch('/api/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: parseFloat(amount), category, description })
+            });
+
+            document.getElementById('amount').value = '';
+            document.getElementById('category').value = '';
+            document.getElementById('description').value = '';
+            loadTransactions(); // Перезагружаем и таблицу, и график
+        }
+
+        loadTransactions();
+    </script>
+</body>
+</html>
